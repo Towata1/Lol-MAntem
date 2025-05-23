@@ -286,22 +286,36 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        // Corrected initialization: use __initial_auth_token directly
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+        // VÁRIAVEIS DE CONFIGURAÇÃO DO FIREBASE
+        // ATENÇÃO: Substitua os valores abaixo pela sua própria configuração do projeto Firebase!
+        // Você pode encontrar isso no Console do Firebase -> Configurações do Projeto -> Seus Apps -> Web (</>)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", // <-- SUBSTITUA AQUI
+            authDomain: "YOUR_AUTH_DOMAIN", // <-- SUBSTITUA AQUI
+            projectId: "YOUR_PROJECT_ID", // <-- SUBSTITUA AQUI
+            storageBucket: "YOUR_STORAGE_BUCKET", // <-- SUBSTITUA AQUI
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // <-- SUBSTITUA AQUI
+            appId: "YOUR_APP_ID" // <-- SUBSTITUA AQUI
+        };
+
+        // O appId abaixo é usado para a estrutura de dados no Firestore,
+        // você pode usar o appId do seu firebaseConfig ou definir um nome único para o seu app.
+        const appId = firebaseConfig.appId || 'default-app-id'; 
+        
+        // initialAuthToken é usado apenas no ambiente Canvas. No GitHub, será null.
+        const initialAuthToken = null; 
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        let userId = null;
+        let userId = null; // userId agora será o UID do usuário anônimo ou do token, mas não será usado para o caminho da coleção de dados compartilhados
         let isAuthReady = false;
         let currentEditingPlayerId = null;
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                userId = user.uid;
+                userId = user.uid; // Atribui o UID do usuário autenticado (anônimo ou token)
             } else {
                 if (initialAuthToken) {
                     try {
@@ -313,13 +327,15 @@
                         userId = auth.currentUser.uid;
                     }
                 } else {
+                    // Se não houver token personalizado (como em uma implantação no GitHub Pages),
+                    // tenta autenticar anonimamente.
                     await signInAnonymously(auth);
                     userId = auth.currentUser.uid;
                 }
             }
             isAuthReady = true;
             console.log("Firebase Auth Ready. User ID:", userId);
-            initializeFirestoreListener();
+            initializeFirestoreListener(); // Inicializa o listener APÓS a autenticação
         });
 
         let playerData = [];
@@ -457,28 +473,30 @@
             const newName = input.value;
 
             try {
-                if (isAuthReady && userId) {
-                    const playerDocRef = doc(db, `artifacts/${appId}/users/${userId}/lolPlayers`, docId);
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    const playerDocRef = doc(db, `artifacts/${appId}/public_data/lolPlayers`, docId); // Caminho da coleção pública
                     await updateDoc(playerDocRef, { name: newName });
                 } else {
-                    console.warn("Firestore não está pronto ou userId não está disponível para atualizar.");
+                    console.warn("Firestore não está pronto para atualizar.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao atualizar o nome do jogador:", e);
             }
         }
 
         async function addPlayerToFirestore() {
             try {
-                if (isAuthReady && userId) {
-                    await addDoc(collection(db, `artifacts/${appId}/users/${userId}/lolPlayers`), {
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    await addDoc(collection(db, `artifacts/${appId}/public_data/lolPlayers`), { // Caminho da coleção pública
                         name: 'Novo Jogador',
                         matches: [{ lane: 'Mid', kills: 0, deaths: 0, assists: 0, csPerMin: 0, visionScore: 0 }]
                     });
                 } else {
-                    console.warn("Firestore não está pronto ou userId não está disponível para adicionar.");
+                    console.warn("Firestore não está pronto para adicionar.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao adicionar novo documento:", e);
             }
         }
@@ -486,12 +504,13 @@
         async function removePlayerFromFirestore(event) {
             const docId = event.target.closest('tr').getAttribute('data-doc-id');
             try {
-                if (isAuthReady && userId) {
-                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/lolPlayers`, docId));
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    await deleteDoc(doc(db, `artifacts/${appId}/public_data/lolPlayers`, docId)); // Caminho da coleção pública
                 } else {
-                    console.warn("Firestore não está pronto ou userId não está disponível para remover.");
+                    console.warn("Firestore não está pronto para remover.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao remover o documento:", e);
             }
         }
@@ -731,8 +750,8 @@
             }
 
             try {
-                if (isAuthReady && userId && currentEditingPlayerId) {
-                    const playerDocRef = doc(db, `artifacts/${appId}/users/${userId}/lolPlayers`, currentEditingPlayerId);
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    const playerDocRef = doc(db, `artifacts/${appId}/public_data/lolPlayers`, currentEditingPlayerId); // Caminho da coleção pública
                     const player = playerData.find(p => p.id === currentEditingPlayerId);
                     
                     if (player && player.matches && player.matches[matchIndex]) {
@@ -741,17 +760,18 @@
                         await updateDoc(playerDocRef, { matches: updatedMatches });
                     }
                 } else {
-                    console.warn("Firestore não está pronto ou userId/currentEditingPlayerId não está disponível para atualizar a partida.");
+                    console.warn("Firestore não está pronto para atualizar a partida.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao atualizar a partida:", e);
             }
         }
 
         async function addMatchToPlayerInFirestore() {
             try {
-                if (isAuthReady && userId && currentEditingPlayerId) {
-                    const playerDocRef = doc(db, `artifacts/${appId}/users/${userId}/lolPlayers`, currentEditingPlayerId);
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    const playerDocRef = doc(db, `artifacts/${appId}/public_data/lolPlayers`, currentEditingPlayerId); // Caminho da coleção pública
                     const player = playerData.find(p => p.id === currentEditingPlayerId);
 
                     if (player) {
@@ -760,9 +780,10 @@
                         await updateDoc(playerDocRef, { matches: updatedMatches });
                     }
                 } else {
-                    console.warn("Firestore não está pronto ou userId/currentEditingPlayerId não está disponível para adicionar partida.");
+                    console.warn("Firestore não está pronto para adicionar partida.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao adicionar nova partida:", e);
             }
         }
@@ -770,8 +791,8 @@
         async function removeMatchFromFirestore(event) {
             const matchIndex = parseInt(event.target.closest('tr').getAttribute('data-match-index'));
             try {
-                if (isAuthReady && userId && currentEditingPlayerId) {
-                    const playerDocRef = doc(db, `artifacts/${appId}/users/${userId}/lolPlayers`, currentEditingPlayerId);
+                if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                    const playerDocRef = doc(db, `artifacts/${appId}/public_data/lolPlayers`, currentEditingPlayerId); // Caminho da coleção pública
                     const player = playerData.find(p => p.id === currentEditingPlayerId);
 
                     if (player && player.matches) {
@@ -779,16 +800,17 @@
                         await updateDoc(playerDocRef, { matches: updatedMatches });
                     }
                 } else {
-                    console.warn("Firestore não está pronto ou userId/currentEditingPlayerId não está disponível para remover partida.");
+                    console.warn("Firestore não está pronto para remover partida.");
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.error("Erro ao remover partida:", e);
             }
         }
 
         function initializeFirestoreListener() {
-            if (isAuthReady && userId) {
-                const q = query(collection(db, `artifacts/${appId}/users/${userId}/lolPlayers`));
+            if (isAuthReady) { // Não precisa do userId aqui, pois é uma coleção pública
+                const q = query(collection(db, `artifacts/${appId}/public_data/lolPlayers`)); // Caminho da coleção pública
                 onSnapshot(q, (snapshot) => {
                     playerData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     populateTable();
@@ -803,7 +825,7 @@
                     console.error("Erro ao ouvir dados do Firestore:", error);
                 });
             } else {
-                console.warn("Não foi possível inicializar o listener do Firestore: Auth não está pronto ou userId não está disponível.");
+                console.warn("Não foi possível inicializar o listener do Firestore: Auth não está pronto.");
             }
         }
 
